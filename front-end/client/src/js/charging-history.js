@@ -36,9 +36,7 @@ async function fetchChargingHistory() {
         const token = localStorage.getItem('accessToken');
         const userId = localStorage.getItem('userId');
 
-        const endpoint = userId 
-            ? `${API_BASE_URL}/charging/history?userId=${encodeURIComponent(userId)}`
-            : `${API_BASE_URL}/charging/history`;
+        const endpoint = `${API_BASE_URL}/history/charging`;
 
         const response = await fetch(endpoint, {
             method: 'GET',
@@ -58,14 +56,14 @@ async function fetchChargingHistory() {
         }
 
         const data = await response.json();
-        // Accept either { sessions: [...] } or a raw array
-        const sessions = Array.isArray(data) ? data : (data.sessions || []);
+        // Accept either { history: [...] }, { sessions: [...] } or a raw array
+        const sessions = Array.isArray(data) ? data : (data.history || data.sessions || []);
         allSessions = sessions;
         filteredSessions = [...allSessions];
-        
+
         renderHistory();
         updateStats();
-        
+
     } catch (error) {
         console.error('Error fetching history:', error);
         // Show empty state on error
@@ -96,7 +94,7 @@ function renderHistory() {
         const startDate = new Date(session.startTime);
         const endDate = new Date(session.endTime);
         const duration = Math.floor((endDate - startDate) / 60000); // minutes
-        
+
         return `
             <div class="session-item" onclick="viewSessionDetail('${session.sessionId}')">
                 <div class="session-icon ${session.status.toLowerCase()}">
@@ -140,10 +138,10 @@ function renderHistory() {
 // Update statistics
 function updateStats() {
     const completedSessions = filteredSessions.filter(s => s.status === 'COMPLETED');
-    
+
     const totalEnergy = completedSessions.reduce((sum, s) => sum + s.energyConsumed, 0);
     const totalCost = completedSessions.reduce((sum, s) => sum + s.totalCost, 0);
-    
+
     totalSessionsEl.textContent = completedSessions.length;
     totalEnergyEl.textContent = totalEnergy.toFixed(2) + ' kWh';
     totalCostEl.textContent = formatCurrency(totalCost);
@@ -156,24 +154,24 @@ function applyFilters() {
         if (statusFilter.value && session.status !== statusFilter.value) {
             return false;
         }
-        
+
         // Date range filter
         const sessionDate = new Date(session.startTime);
-        
+
         if (dateFrom.value) {
             const fromDate = new Date(dateFrom.value);
             if (sessionDate < fromDate) return false;
         }
-        
+
         if (dateTo.value) {
             const toDate = new Date(dateTo.value);
             toDate.setHours(23, 59, 59);
             if (sessionDate > toDate) return false;
         }
-        
+
         return true;
     });
-    
+
     renderHistory();
     updateStats();
 }
@@ -186,11 +184,11 @@ function viewSessionDetail(sessionId) {
 // Export to CSV
 function exportToCSV() {
     const headers = ['Mã phiên', 'Trạm sạc', 'Ngày', 'Giờ bắt đầu', 'Giờ kết thúc', 'Năng lượng (kWh)', 'Chi phí (đ)', 'SOC bắt đầu', 'SOC kết thúc', 'Trạng thái'];
-    
+
     const rows = filteredSessions.map(session => {
         const startDate = new Date(session.startTime);
         const endDate = new Date(session.endTime);
-        
+
         return [
             session.sessionId,
             session.stationName,
@@ -204,9 +202,9 @@ function exportToCSV() {
             session.status === 'COMPLETED' ? 'Hoàn thành' : 'Thất bại'
         ].join(',');
     });
-    
+
     const csv = [headers.join(','), ...rows].join('\n');
-    
+
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);

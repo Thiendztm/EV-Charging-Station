@@ -3,6 +3,7 @@ package uth.edu.vn.controller;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import uth.edu.vn.entity.*;
 import uth.edu.vn.enums.*;
@@ -37,6 +38,9 @@ public class AdminController {
 
     @Autowired
     private PhienSacRepository phienSacRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     // ==================== STATION MANAGEMENT ====================
 
@@ -290,6 +294,11 @@ public class AdminController {
                 userData.put("walletBalance", user.getWalletBalance());
                 userData.put("createdAt", user.getCreatedAt());
 
+                String fullName = ((user.getFirstName() != null ? user.getFirstName() : "").trim() + " "
+                        + (user.getLastName() != null ? user.getLastName() : "").trim()).trim();
+                userData.put("name", fullName);
+                userData.put("active", user.getActive());
+
                 userList.add(userData);
             }
 
@@ -337,7 +346,6 @@ public class AdminController {
                 response.put("user", Map.of(
                         "id", newStaff.getId(),
                         "email", newStaff.getEmail(),
-                        // Giả định getFirstName() và getLastName() không null
                         "fullName",
                         (newStaff.getFirstName() != null ? newStaff.getFirstName() : "") + " "
                                 + (newStaff.getLastName() != null ? newStaff.getLastName() : ""),
@@ -346,13 +354,240 @@ public class AdminController {
             } else {
                 response.put("success", false);
                 response.put("error", "Không thể tạo tài khoản nhân viên. Có thể email đã tồn tại.");
-                return ResponseEntity.badRequest().body(response);
+                return ResponseEntity.ok(response);
             }
 
         } catch (Exception e) {
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
             errorResponse.put("error", "Lỗi khi tạo tài khoản: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
+
+    @PostMapping("/users")
+    public ResponseEntity<Map<String, Object>> createUser(
+            @RequestBody Map<String, Object> userData) {
+        try {
+            String email = (String) userData.get("email");
+            String password = (String) userData.get("password");
+            String name = (String) userData.get("name");
+            String phone = (String) userData.get("phone");
+            String roleStr = (String) userData.get("role");
+            Boolean active = userData.get("active") != null
+                    ? Boolean.valueOf(userData.get("active").toString())
+                    : Boolean.TRUE;
+
+            Map<String, Object> response = new HashMap<>();
+
+            if (email == null || email.isEmpty() || password == null || password.isEmpty()
+                    || name == null || name.isEmpty()) {
+                response.put("success", false);
+                response.put("error", "Thiếu thông tin bắt buộc (email, mật khẩu, tên)");
+                return ResponseEntity.ok(response);
+            }
+
+            if (userRepository.existsByEmail(email)) {
+                response.put("success", false);
+                response.put("error", "Email đã tồn tại");
+                return ResponseEntity.ok(response);
+            }
+
+            String[] nameParts = name.trim().split(" ", 2);
+            String firstName = nameParts[0];
+            String lastName = nameParts.length > 1 ? nameParts[1] : "";
+
+            UserRole userRole;
+            if (roleStr != null && !roleStr.isEmpty()) {
+                if ("DRIVER".equalsIgnoreCase(roleStr)) {
+                    userRole = UserRole.EV_DRIVER;
+                } else {
+                    userRole = UserRole.valueOf(roleStr.toUpperCase());
+                }
+            } else {
+                userRole = UserRole.EV_DRIVER;
+            }
+
+            User user = new User(email, passwordEncoder.encode(password), firstName, lastName, userRole);
+            user.setPhone(phone);
+            user.setActive(active);
+
+            User saved = userRepository.save(user);
+
+            Map<String, Object> userResp = new HashMap<>();
+            userResp.put("id", saved.getId());
+            userResp.put("email", saved.getEmail());
+            userResp.put("name",
+                    ((saved.getFirstName() != null ? saved.getFirstName() : "").trim() + " "
+                            + (saved.getLastName() != null ? saved.getLastName() : "").trim()).trim());
+            userResp.put("phone", saved.getPhone());
+            userResp.put("role", saved.getRole());
+            userResp.put("active", saved.getActive());
+            userResp.put("createdAt", saved.getCreatedAt());
+
+            response.put("success", true);
+            response.put("message", "Tạo người dùng thành công");
+            response.put("user", userResp);
+
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "Role không hợp lệ: " + e.getMessage());
+            return ResponseEntity.ok(errorResponse);
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "Lỗi khi tạo người dùng: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
+
+    @PutMapping("/users/{userId}")
+    public ResponseEntity<Map<String, Object>> updateUser(
+            @PathVariable Long userId,
+            @RequestBody Map<String, Object> updateData) {
+        try {
+            Optional<User> optionalUser = userRepository.findById(userId);
+            Map<String, Object> response = new HashMap<>();
+
+            if (optionalUser.isEmpty()) {
+                response.put("success", false);
+                response.put("error", "Người dùng không tồn tại");
+                return ResponseEntity.ok(response);
+            }
+
+            User user = optionalUser.get();
+
+            Object nameObj = updateData.get("name");
+            Object fullNameObj = updateData.get("fullName");
+            String name = nameObj != null ? nameObj.toString()
+                    : (fullNameObj != null ? fullNameObj.toString() : null);
+            if (name != null && !name.isEmpty()) {
+                String[] nameParts = name.trim().split(" ", 2);
+                user.setFirstName(nameParts[0]);
+                user.setLastName(nameParts.length > 1 ? nameParts[1] : "");
+            }
+
+            Object emailObj = updateData.get("email");
+            if (emailObj != null) {
+                String newEmail = emailObj.toString();
+                if (!newEmail.equalsIgnoreCase(user.getEmail()) && userRepository.existsByEmail(newEmail)) {
+                    response.put("success", false);
+                    response.put("error", "Email đã tồn tại");
+                    return ResponseEntity.ok(response);
+                }
+                user.setEmail(newEmail);
+            }
+
+            Object phoneObj = updateData.get("phone");
+            Object phoneNumberObj = updateData.get("phoneNumber");
+            if (phoneObj != null || phoneNumberObj != null) {
+                String phone = phoneObj != null ? phoneObj.toString() : phoneNumberObj.toString();
+                user.setPhone(phone);
+            }
+
+            Object passwordObj = updateData.get("password");
+            if (passwordObj != null && !passwordObj.toString().isEmpty()) {
+                user.setPassword(passwordEncoder.encode(passwordObj.toString()));
+            }
+
+            Object roleObj = updateData.get("role");
+            if (roleObj != null) {
+                String roleStr = roleObj.toString();
+                if (!roleStr.isEmpty()) {
+                    UserRole newRole;
+                    if ("DRIVER".equalsIgnoreCase(roleStr)) {
+                        newRole = UserRole.EV_DRIVER;
+                    } else {
+                        newRole = UserRole.valueOf(roleStr.toUpperCase());
+                    }
+                    user.setRole(newRole);
+                }
+            }
+
+            Object activeObj = updateData.get("active");
+            if (activeObj != null) {
+                Boolean active = Boolean.valueOf(activeObj.toString());
+                user.setActive(active);
+            }
+
+            User saved = userRepository.save(user);
+
+            Map<String, Object> userResp = new HashMap<>();
+            userResp.put("id", saved.getId());
+            userResp.put("email", saved.getEmail());
+            userResp.put("firstName", saved.getFirstName());
+            userResp.put("lastName", saved.getLastName());
+            userResp.put("phone", saved.getPhone());
+            userResp.put("role", saved.getRole());
+            userResp.put("active", saved.getActive());
+            userResp.put("createdAt", saved.getCreatedAt());
+
+            response.put("success", true);
+            response.put("message", "Cập nhật người dùng thành công");
+            response.put("user", userResp);
+
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "Role không hợp lệ: " + e.getMessage());
+            return ResponseEntity.ok(errorResponse);
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "Lỗi khi cập nhật người dùng: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
+
+    @DeleteMapping("/users/{userId}")
+    public ResponseEntity<Map<String, Object>> deleteUser(@PathVariable Long userId) {
+        try {
+            Map<String, Object> response = new HashMap<>();
+
+            if (userRepository.existsById(userId)) {
+                userRepository.deleteById(userId);
+            }
+
+            response.put("success", true);
+            response.put("message", "Xóa người dùng thành công");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "Lỗi khi xóa người dùng: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
+
+    @PatchMapping("/users/{userId}/toggle-status")
+    public ResponseEntity<Map<String, Object>> toggleUserStatus(@PathVariable Long userId) {
+        try {
+            Optional<User> optionalUser = userRepository.findById(userId);
+            Map<String, Object> response = new HashMap<>();
+
+            if (optionalUser.isEmpty()) {
+                response.put("success", false);
+                response.put("error", "Người dùng không tồn tại");
+                return ResponseEntity.ok(response);
+            }
+
+            User user = optionalUser.get();
+            Boolean current = user.getActive();
+            boolean newStatus = current == null ? false : !current;
+            user.setActive(newStatus);
+            userRepository.save(user);
+
+            response.put("success", true);
+            response.put("active", user.getActive());
+            response.put("message", "Cập nhật trạng thái tài khoản thành công");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "Lỗi khi cập nhật trạng thái: " + e.getMessage());
             return ResponseEntity.internalServerError().body(errorResponse);
         }
     }

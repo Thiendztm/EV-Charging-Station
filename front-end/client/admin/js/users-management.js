@@ -91,15 +91,16 @@ function renderUsersPage() {
  */
 async function loadUsers() {
     try {
-        const response = await fetchWithAuth(`${API_BASE_URL}/admin/users`);
-        
-        if (response.ok) {
-            allUsers = await response.json();
-            updateRoleCounts();
-            renderUsersTable(allUsers);
-        } else {
-            showNotification('Không thể tải danh sách người dùng', 'error');
-        }
+        const data = await fetchWithAuth(`${API_BASE_URL}/admin/users`);
+        const users = data && Array.isArray(data.users)
+            ? data.users
+            : Array.isArray(data)
+                ? data
+                : [];
+
+        allUsers = users;
+        updateRoleCounts();
+        renderUsersTable(allUsers);
     } catch (error) {
         console.error('Error loading users:', error);
         showNotification('Lỗi kết nối đến máy chủ', 'error');
@@ -312,17 +313,19 @@ export async function showEditUserModal(userId) {
  */
 async function createUser(data) {
     try {
-        const response = await fetchWithAuth(`${API_BASE_URL}/admin/users`, {
+        const result = await fetchWithAuth(`${API_BASE_URL}/admin/users`, {
             method: 'POST',
             body: JSON.stringify(data)
         });
 
-        if (response.ok) {
+        if (result && result.success) {
             showNotification('Tạo người dùng thành công!', 'success');
             await loadUsers();
         } else {
-            const error = await response.json();
-            showNotification(error.message || 'Không thể tạo người dùng', 'error');
+            showNotification(
+                (result && (result.error || result.message)) || 'Không thể tạo người dùng',
+                'error'
+            );
         }
     } catch (error) {
         console.error('Error creating user:', error);
@@ -335,17 +338,19 @@ async function createUser(data) {
  */
 async function updateUser(userId, data) {
     try {
-        const response = await fetchWithAuth(`${API_BASE_URL}/admin/users/${userId}`, {
+        const result = await fetchWithAuth(`${API_BASE_URL}/admin/users/${userId}`, {
             method: 'PUT',
             body: JSON.stringify(data)
         });
 
-        if (response.ok) {
+        if (result && result.success) {
             showNotification('Cập nhật người dùng thành công!', 'success');
             await loadUsers();
         } else {
-            const error = await response.json();
-            showNotification(error.message || 'Không thể cập nhật người dùng', 'error');
+            showNotification(
+                (result && (result.error || result.message)) || 'Không thể cập nhật người dùng',
+                'error'
+            );
         }
     } catch (error) {
         console.error('Error updating user:', error);
@@ -365,16 +370,18 @@ export async function deleteUser(userId) {
     }
 
     try {
-        const response = await fetchWithAuth(`${API_BASE_URL}/admin/users/${userId}`, {
+        const result = await fetchWithAuth(`${API_BASE_URL}/admin/users/${userId}`, {
             method: 'DELETE'
         });
 
-        if (response.ok) {
+        if (result && result.success) {
             showNotification('Xóa người dùng thành công!', 'success');
             await loadUsers();
         } else {
-            const error = await response.json();
-            showNotification(error.message || 'Không thể xóa người dùng', 'error');
+            showNotification(
+                (result && (result.error || result.message)) || 'Không thể xóa người dùng',
+                'error'
+            );
         }
     } catch (error) {
         console.error('Error deleting user:', error);

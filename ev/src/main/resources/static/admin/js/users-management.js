@@ -26,7 +26,7 @@ function renderUsersPage() {
         console.error('Main content container not found');
         return;
     }
-    
+
     content.innerHTML = `
         <div class="page-header">
             <h2>Quản lý người dùng</h2>
@@ -91,15 +91,16 @@ function renderUsersPage() {
  */
 async function loadUsers() {
     try {
-        const response = await fetchWithAuth(`${API_BASE_URL}/admin/users`);
-        
-        if (response.ok) {
-            allUsers = await response.json();
-            updateRoleCounts();
-            renderUsersTable(allUsers);
-        } else {
-            showNotification('Không thể tải danh sách người dùng', 'error');
-        }
+        const data = await fetchWithAuth(`${API_BASE_URL}/admin/users`);
+        const users = data && Array.isArray(data.users)
+            ? data.users
+            : Array.isArray(data)
+                ? data
+                : [];
+
+        allUsers = users;
+        updateRoleCounts();
+        renderUsersTable(allUsers);
     } catch (error) {
         console.error('Error loading users:', error);
         showNotification('Lỗi kết nối đến máy chủ', 'error');
@@ -121,17 +122,17 @@ function updateRoleCounts() {
  */
 export function filterByRole(role) {
     currentFilter = role;
-    
+
     // Update active filter button
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.filter === role);
     });
 
     // Filter and render
-    const filtered = role === 'ALL' 
-        ? allUsers 
+    const filtered = role === 'ALL'
+        ? allUsers
         : allUsers.filter(u => u.role === role);
-    
+
     renderUsersTable(filtered);
 }
 
@@ -139,10 +140,10 @@ export function filterByRole(role) {
  * Search users
  */
 function searchUsers(searchTerm) {
-    const filtered = allUsers.filter(user => 
+    const filtered = allUsers.filter(user =>
         (user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         user.phone?.includes(searchTerm)) &&
+            user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            user.phone?.includes(searchTerm)) &&
         (currentFilter === 'ALL' || user.role === currentFilter)
     );
     renderUsersTable(filtered);
@@ -153,7 +154,7 @@ function searchUsers(searchTerm) {
  */
 function renderUsersTable(users) {
     const tbody = document.getElementById('usersTableBody');
-    
+
     if (users.length === 0) {
         tbody.innerHTML = `
             <tr>
@@ -243,7 +244,7 @@ export function showCreateUserModal() {
         const formData = new FormData(form);
         const data = Object.fromEntries(formData);
         data.active = data.active === 'true';
-        
+
         await createUser(data);
         closeModal(modal);
     });
@@ -294,14 +295,14 @@ export async function showEditUserModal(userId) {
         const form = document.getElementById('userForm');
         const formData = new FormData(form);
         const data = Object.fromEntries(formData);
-        
+
         // Remove password if empty
         if (!data.password) {
             delete data.password;
         }
-        
+
         data.active = data.active === 'true';
-        
+
         await updateUser(userId, data);
         closeModal(modal);
     });
@@ -312,17 +313,19 @@ export async function showEditUserModal(userId) {
  */
 async function createUser(data) {
     try {
-        const response = await fetchWithAuth(`${API_BASE_URL}/admin/users`, {
+        const result = await fetchWithAuth(`${API_BASE_URL}/admin/users`, {
             method: 'POST',
             body: JSON.stringify(data)
         });
 
-        if (response.ok) {
+        if (result && result.success) {
             showNotification('Tạo người dùng thành công!', 'success');
             await loadUsers();
         } else {
-            const error = await response.json();
-            showNotification(error.message || 'Không thể tạo người dùng', 'error');
+            showNotification(
+                (result && (result.error || result.message)) || 'Không thể tạo người dùng',
+                'error'
+            );
         }
     } catch (error) {
         console.error('Error creating user:', error);
@@ -335,17 +338,19 @@ async function createUser(data) {
  */
 async function updateUser(userId, data) {
     try {
-        const response = await fetchWithAuth(`${API_BASE_URL}/admin/users/${userId}`, {
+        const result = await fetchWithAuth(`${API_BASE_URL}/admin/users/${userId}`, {
             method: 'PUT',
             body: JSON.stringify(data)
         });
 
-        if (response.ok) {
+        if (result && result.success) {
             showNotification('Cập nhật người dùng thành công!', 'success');
             await loadUsers();
         } else {
-            const error = await response.json();
-            showNotification(error.message || 'Không thể cập nhật người dùng', 'error');
+            showNotification(
+                (result && (result.error || result.message)) || 'Không thể cập nhật người dùng',
+                'error'
+            );
         }
     } catch (error) {
         console.error('Error updating user:', error);
@@ -365,16 +370,18 @@ export async function deleteUser(userId) {
     }
 
     try {
-        const response = await fetchWithAuth(`${API_BASE_URL}/admin/users/${userId}`, {
+        const result = await fetchWithAuth(`${API_BASE_URL}/admin/users/${userId}`, {
             method: 'DELETE'
         });
 
-        if (response.ok) {
+        if (result && result.success) {
             showNotification('Xóa người dùng thành công!', 'success');
             await loadUsers();
         } else {
-            const error = await response.json();
-            showNotification(error.message || 'Không thể xóa người dùng', 'error');
+            showNotification(
+                (result && (result.error || result.message)) || 'Không thể xóa người dùng',
+                'error'
+            );
         }
     } catch (error) {
         console.error('Error deleting user:', error);

@@ -24,24 +24,24 @@ import java.util.*;
 @RequestMapping("/api/staff")
 @PreAuthorize("hasRole('CS_STAFF') or hasRole('ADMIN')")
 public class CSStaffController {
-    
+
     @Autowired
     private CSStaffService staffService;
-    
+
     @Autowired
     private TramSacRepository tramSacRepository;
-    
+
     @Autowired
     private ChargerRepository chargerRepository;
-    
+
     @Autowired
     private PhienSacRepository phienSacRepository;
-    
+
     @Autowired
     private UserRepository userRepository;
-    
+
     // ==================== STATION MONITORING ====================
-    
+
     /**
      * Lấy trạng thái trạm sạc
      * GET /api/staff/station/{stationId}/status
@@ -58,15 +58,15 @@ public class CSStaffController {
                 errorResponse.put("error", "Không tìm thấy trạm sạc");
                 return ResponseEntity.notFound().build();
             }
-            
+
             // Lấy danh sách điểm sạc tại trạm
             List<Charger> chargers = staffService.getStationStatus(stationId);
-            
+
             List<Map<String, Object>> chargerList = new ArrayList<>();
             int availableCount = 0;
             int occupiedCount = 0;
             int outOfOrderCount = 0;
-            
+
             for (Charger charger : chargers) {
                 Map<String, Object> chargerData = new HashMap<>();
                 chargerData.put("id", charger.getPointId());
@@ -75,52 +75,57 @@ public class CSStaffController {
                 chargerData.put("powerCapacity", charger.getPowerCapacity());
                 chargerData.put("status", charger.getStatus());
                 chargerData.put("pricePerKwh", charger.getPricePerKwh());
-                
+
                 // Đếm theo status
-                if (charger.getStatus() == PointStatus.AVAILABLE) availableCount++;
-                else if (charger.getStatus() == PointStatus.OCCUPIED) occupiedCount++;
-                else if (charger.getStatus() == PointStatus.OUT_OF_ORDER) outOfOrderCount++;
-                
+                if (charger.getStatus() == PointStatus.AVAILABLE)
+                    availableCount++;
+                else if (charger.getStatus() == PointStatus.OCCUPIED)
+                    occupiedCount++;
+                else if (charger.getStatus() == PointStatus.OUT_OF_ORDER)
+                    outOfOrderCount++;
+
                 chargerList.add(chargerData);
             }
-            
+
             // Lấy active sessions tại trạm
             List<PhienSac> activeSessions = staffService.getActiveSessionsAtStation(stationId);
             List<Map<String, Object>> sessionList = new ArrayList<>();
-            
+
             for (PhienSac session : activeSessions) {
                 Map<String, Object> sessionData = new HashMap<>();
                 sessionData.put("sessionId", session.getSessionId());
                 sessionData.put("chargerId", session.getChargingPoint().getPointId());
                 sessionData.put("chargerName", session.getChargingPoint().getPointName());
-                sessionData.put("startTime", session.getStartTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+                sessionData.put("startTime",
+                        session.getStartTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
                 sessionData.put("qrCode", session.getQrCode());
-                
+
                 // User info (nếu có)
                 if (session.getUser() != null) {
                     sessionData.put("userId", session.getUser().getId());
-                    sessionData.put("userName", session.getUser().getFirstName() + " " + session.getUser().getLastName());
+                    sessionData.put("userName",
+                            session.getUser().getFirstName() + " " + session.getUser().getLastName());
                 } else {
                     sessionData.put("userId", null);
                     sessionData.put("userName", "Walk-in customer");
                 }
-                
+
                 sessionList.add(sessionData);
             }
-            
+
             Map<String, Object> stationData = new HashMap<>();
             stationData.put("id", station.getId());
             stationData.put("name", station.getName());
             stationData.put("address", station.getAddress());
             stationData.put("status", station.getStatus());
-            
+
             Map<String, Object> summary = new HashMap<>();
             summary.put("totalChargers", chargers.size());
             summary.put("available", availableCount);
             summary.put("occupied", occupiedCount);
             summary.put("outOfOrder", outOfOrderCount);
             summary.put("activeSessions", activeSessions.size());
-            
+
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("station", stationData);
@@ -128,9 +133,9 @@ public class CSStaffController {
             response.put("chargers", chargerList);
             response.put("activeSessions", sessionList);
             response.put("timestamp", LocalDateTime.now());
-            
+
             return ResponseEntity.ok(response);
-            
+
         } catch (Exception e) {
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
@@ -138,11 +143,21 @@ public class CSStaffController {
             return ResponseEntity.internalServerError().body(errorResponse);
         }
     }
-    
-    // ==================== SESSION MANAGEMENT ====================
-    
+
     /**
-     * Bắt đầu phiên sạc cho khách walk-in
+     * Alias cho staffAPI.getStationStatus
+     * GET /api/staff/stations/{stationId}/status
+     */
+    @GetMapping("/stations/{stationId}/status")
+    public ResponseEntity<Map<String, Object>> getStationStatusAlias(
+            @PathVariable Long stationId) {
+        return getStationStatus(stationId);
+    }
+
+    // ==================== SESSION MANAGEMENT ====================
+
+    /**
+     * Bắt đầu phiên sạc cho khách walk-in (endpoint gốc)
      * POST /api/staff/session/start
      */
     @PostMapping("/session/start")
@@ -151,27 +166,27 @@ public class CSStaffController {
         try {
             Long pointId = Long.parseLong(sessionData.get("pointId").toString());
             String vehiclePlate = (String) sessionData.get("vehiclePlate");
-            
+
             PhienSac newSession = staffService.startSessionByStaff(pointId, vehiclePlate);
-            
+
             Map<String, Object> response = new HashMap<>();
             if (newSession != null) {
                 response.put("success", true);
                 response.put("message", "Bắt đầu phiên sạc thành công");
                 response.put("session", Map.of(
-                    "sessionId", newSession.getSessionId(),
-                    "qrCode", newSession.getQrCode(),
-                    "startTime", newSession.getStartTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
-                    "chargerId", newSession.getChargingPoint().getPointId(),
-                    "chargerName", newSession.getChargingPoint().getPointName()
-                ));
+                        "sessionId", newSession.getSessionId(),
+                        "qrCode", newSession.getQrCode(),
+                        "startTime",
+                        newSession.getStartTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
+                        "chargerId", newSession.getChargingPoint().getPointId(),
+                        "chargerName", newSession.getChargingPoint().getPointName()));
                 return ResponseEntity.ok(response);
             } else {
                 response.put("success", false);
                 response.put("error", "Không thể bắt đầu phiên sạc. Điểm sạc có thể không khả dụng.");
                 return ResponseEntity.badRequest().body(response);
             }
-            
+
         } catch (Exception e) {
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
@@ -179,9 +194,24 @@ public class CSStaffController {
             return ResponseEntity.internalServerError().body(errorResponse);
         }
     }
-    
+
     /**
-     * Dừng phiên sạc
+     * Alias cho staff/sessions.js và staffAPI.startSessionForDriver
+     * POST /api/staff/sessions/start
+     */
+    @PostMapping("/sessions/start")
+    public ResponseEntity<Map<String, Object>> startSessionAlias(
+            @RequestBody Map<String, Object> sessionData) {
+        // Ánh xạ chargerId -> pointId, dùng vehiclePlate mặc định nếu thiếu
+        if (!sessionData.containsKey("pointId") && sessionData.containsKey("chargerId")) {
+            sessionData.put("pointId", sessionData.get("chargerId"));
+        }
+        sessionData.putIfAbsent("vehiclePlate", "WALK_IN");
+        return startSession(sessionData);
+    }
+
+    /**
+     * Dừng phiên sạc (endpoint gốc)
      * PUT /api/staff/session/{sessionId}/stop
      */
     @PutMapping("/session/{sessionId}/stop")
@@ -191,9 +221,9 @@ public class CSStaffController {
         try {
             Double energyConsumed = Double.parseDouble(sessionData.get("energyConsumed").toString());
             Integer endSoc = Integer.parseInt(sessionData.get("endSoc").toString());
-            
+
             boolean success = staffService.stopChargingSession(sessionId, energyConsumed, endSoc);
-            
+
             Map<String, Object> response = new HashMap<>();
             if (success) {
                 // Lấy thông tin session để trả về
@@ -202,13 +232,15 @@ public class CSStaffController {
                     response.put("success", true);
                     response.put("message", "Dừng phiên sạc thành công");
                     response.put("session", Map.of(
-                        "sessionId", session.getSessionId(),
-                        "energyConsumed", session.getEnergyConsumed(),
-                        "totalCost", session.getTotalCost(),
-                        "startTime", session.getStartTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
-                        "endTime", session.getEndTime() != null ? 
-                            session.getEndTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) : null
-                    ));
+                            "sessionId", session.getSessionId(),
+                            "energyConsumed", session.getEnergyConsumed(),
+                            "totalCost", session.getTotalCost(),
+                            "startTime",
+                            session.getStartTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
+                            "endTime",
+                            session.getEndTime() != null
+                                    ? session.getEndTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+                                    : null));
                 } else {
                     response.put("success", true);
                     response.put("message", "Dừng phiên sạc thành công");
@@ -219,7 +251,7 @@ public class CSStaffController {
                 response.put("error", "Không thể dừng phiên sạc");
                 return ResponseEntity.badRequest().body(response);
             }
-            
+
         } catch (Exception e) {
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
@@ -227,11 +259,30 @@ public class CSStaffController {
             return ResponseEntity.internalServerError().body(errorResponse);
         }
     }
-    
-    // ==================== PAYMENT ====================
-    
+
     /**
-     * Xử lý thanh toán tiền mặt
+     * Alias cho staff/sessions.js
+     * POST /api/staff/sessions/{sessionId}/stop
+     */
+    @PostMapping("/sessions/{sessionId}/stop")
+    public ResponseEntity<Map<String, Object>> stopSessionAlias(
+            @PathVariable Long sessionId,
+            @RequestBody Map<String, Object> sessionData) {
+        // Nếu thiếu energyConsumed, cố gắng lấy từ session hiện tại
+        if (!sessionData.containsKey("energyConsumed")) {
+            PhienSac session = phienSacRepository.findById(sessionId).orElse(null);
+            Double energyValue = (session != null && session.getEnergyConsumed() != null)
+                    ? session.getEnergyConsumed()
+                    : 0.0;
+            sessionData.put("energyConsumed", energyValue);
+        }
+        return stopSession(sessionId, sessionData);
+    }
+
+    // ==================== PAYMENT ====================
+
+    /**
+     * Xử lý thanh toán tiền mặt (endpoint gốc)
      * POST /api/staff/payment/cash
      */
     @PostMapping("/payment/cash")
@@ -239,27 +290,27 @@ public class CSStaffController {
             @RequestBody Map<String, Object> paymentData) {
         try {
             Long sessionId = Long.parseLong(paymentData.get("sessionId").toString());
-            
+
             ThanhToan payment = staffService.processCashPayment(sessionId);
-            
+
             Map<String, Object> response = new HashMap<>();
             if (payment != null) {
                 response.put("success", true);
                 response.put("message", "Thanh toán thành công");
                 response.put("payment", Map.of(
-                    "paymentId", payment.getId(),
-                    "amount", payment.getAmount(),
-                    "paymentMethod", payment.getMethod(),
-                    "status", payment.getStatus(),
-                    "paymentTime", payment.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
-                ));
+                        "paymentId", payment.getId(),
+                        "amount", payment.getAmount(),
+                        "paymentMethod", payment.getMethod(),
+                        "status", payment.getStatus(),
+                        "paymentTime",
+                        payment.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))));
                 return ResponseEntity.ok(response);
             } else {
                 response.put("success", false);
                 response.put("error", "Không thể xử lý thanh toán");
                 return ResponseEntity.badRequest().body(response);
             }
-            
+
         } catch (Exception e) {
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
@@ -267,9 +318,29 @@ public class CSStaffController {
             return ResponseEntity.internalServerError().body(errorResponse);
         }
     }
-    
+
+    /**
+     * Alias cho staffAPI.processCashPayment
+     * POST /api/staff/payments/cash
+     */
+    @PostMapping("/payments/cash")
+    public ResponseEntity<Map<String, Object>> processCashPaymentAlias(
+            @RequestBody Map<String, Object> paymentData) {
+        return processCashPayment(paymentData);
+    }
+
+    /**
+     * Alias cho staff/sessions.js & staff/payments.js
+     * POST /api/staff/payments/confirm
+     */
+    @PostMapping("/payments/confirm")
+    public ResponseEntity<Map<String, Object>> confirmPayment(
+            @RequestBody Map<String, Object> paymentData) {
+        return processCashPayment(paymentData);
+    }
+
     // ==================== INCIDENT REPORTING ====================
-    
+
     /**
      * Báo cáo sự cố
      * POST /api/staff/incident
@@ -281,31 +352,30 @@ public class CSStaffController {
             Long stationId = Long.parseLong(incidentData.get("stationId").toString());
             Long pointId = Long.parseLong(incidentData.get("pointId").toString());
             String description = (String) incidentData.get("description");
-            
+
             boolean success = staffService.reportIncident(stationId, pointId, description);
-            
+
             Map<String, Object> response = new HashMap<>();
             if (success) {
                 response.put("success", true);
                 response.put("message", "Báo cáo sự cố thành công. Điểm sạc đã được đánh dấu OUT_OF_ORDER.");
-                
+
                 // Lấy thông tin charger
                 Charger charger = chargerRepository.findById(pointId).orElse(null);
                 if (charger != null) {
                     response.put("charger", Map.of(
-                        "id", charger.getPointId(),
-                        "name", charger.getPointName(),
-                        "status", charger.getStatus()
-                    ));
+                            "id", charger.getPointId(),
+                            "name", charger.getPointName(),
+                            "status", charger.getStatus()));
                 }
-                
+
                 return ResponseEntity.ok(response);
             } else {
                 response.put("success", false);
                 response.put("error", "Không thể báo cáo sự cố");
                 return ResponseEntity.badRequest().body(response);
             }
-            
+
         } catch (Exception e) {
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
@@ -313,9 +383,9 @@ public class CSStaffController {
             return ResponseEntity.internalServerError().body(errorResponse);
         }
     }
-    
+
     // ==================== REPORTS ====================
-    
+
     /**
      * Báo cáo hàng ngày
      * GET /api/staff/report/daily
@@ -332,22 +402,22 @@ public class CSStaffController {
             } else {
                 reportDate = LocalDate.now();
             }
-            
+
             // Lấy start và end time cho ngày
             LocalDateTime startOfDay = reportDate.atStartOfDay();
             LocalDateTime endOfDay = reportDate.plusDays(1).atStartOfDay();
-            
+
             // Lấy sessions trong ngày
             List<PhienSac> sessions = phienSacRepository
-                .findByChargingPointChargingStationIdAndStartTimeBetween(stationId, startOfDay, endOfDay);
-            
+                    .findByChargingPointChargingStationIdAndStartTimeBetween(stationId, startOfDay, endOfDay);
+
             // Tính toán
             int totalSessions = sessions.size();
             double totalEnergy = 0.0;
             double totalRevenue = 0.0;
             int completedSessions = 0;
             int activeSessions = 0;
-            
+
             for (PhienSac session : sessions) {
                 if (session.getEnergyConsumed() != null) {
                     totalEnergy += session.getEnergyConsumed();
@@ -361,10 +431,10 @@ public class CSStaffController {
                     activeSessions++;
                 }
             }
-            
+
             // Lấy thông tin trạm
             TramSac station = tramSacRepository.findById(stationId).orElse(null);
-            
+
             Map<String, Object> reportData = new HashMap<>();
             reportData.put("date", reportDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
             reportData.put("stationId", stationId);
@@ -374,7 +444,7 @@ public class CSStaffController {
             reportData.put("activeSessions", activeSessions);
             reportData.put("totalEnergy", Math.round(totalEnergy * 100.0) / 100.0);
             reportData.put("totalRevenue", Math.round(totalRevenue * 100.0) / 100.0);
-            
+
             if (totalSessions > 0) {
                 reportData.put("avgEnergyPerSession", Math.round((totalEnergy / totalSessions) * 100.0) / 100.0);
                 reportData.put("avgRevenuePerSession", Math.round((totalRevenue / totalSessions) * 100.0) / 100.0);
@@ -382,14 +452,14 @@ public class CSStaffController {
                 reportData.put("avgEnergyPerSession", 0.0);
                 reportData.put("avgRevenuePerSession", 0.0);
             }
-            
+
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("report", reportData);
             response.put("timestamp", LocalDateTime.now());
-            
+
             return ResponseEntity.ok(response);
-            
+
         } catch (Exception e) {
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
@@ -397,7 +467,7 @@ public class CSStaffController {
             return ResponseEntity.internalServerError().body(errorResponse);
         }
     }
-    
+
     /**
      * Lấy danh sách trạm mà staff được phân công (simplified - lấy tất cả)
      * GET /api/staff/stations
@@ -408,36 +478,36 @@ public class CSStaffController {
         try {
             // TODO: Trong thực tế, cần có bảng staff_station_assignment
             // Hiện tại đơn giản hóa bằng cách trả về tất cả stations
-            
+
             List<TramSac> stations = tramSacRepository.findAll();
             List<Map<String, Object>> stationList = new ArrayList<>();
-            
+
             for (TramSac station : stations) {
                 Map<String, Object> stationData = new HashMap<>();
                 stationData.put("id", station.getId());
                 stationData.put("name", station.getName());
                 stationData.put("address", station.getAddress());
                 stationData.put("status", station.getStatus());
-                
+
                 // Count chargers
                 List<Charger> chargers = chargerRepository.findByChargingStationId(station.getId());
                 long availableCount = chargers.stream()
-                    .filter(c -> c.getStatus() == PointStatus.AVAILABLE)
-                    .count();
-                
+                        .filter(c -> c.getStatus() == PointStatus.AVAILABLE)
+                        .count();
+
                 stationData.put("totalChargers", chargers.size());
                 stationData.put("availableChargers", availableCount);
-                
+
                 stationList.add(stationData);
             }
-            
+
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("stations", stationList);
             response.put("total", stationList.size());
-            
+
             return ResponseEntity.ok(response);
-            
+
         } catch (Exception e) {
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);

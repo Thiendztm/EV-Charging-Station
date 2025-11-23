@@ -30,15 +30,15 @@ export function redirectToLogin(redirectUrl = null) {
 // ============= HTTP Client =============
 async function apiRequest(endpoint, options = {}) {
     const token = getAuthToken();
-    
+
     const defaultHeaders = {
         'Content-Type': 'application/json',
     };
-    
+
     if (token) {
         defaultHeaders['Authorization'] = `Bearer ${token}`;
     }
-    
+
     const config = {
         ...options,
         headers: {
@@ -46,29 +46,29 @@ async function apiRequest(endpoint, options = {}) {
             ...options.headers
         }
     };
-    
+
     try {
         const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
-        
+
         // Handle 401 Unauthorized
         if (response.status === 401) {
             localStorage.clear();
             redirectToLogin(window.location.pathname);
             throw new Error('Session expired. Please login again.');
         }
-        
+
         // Handle 403 Forbidden
         if (response.status === 403) {
             throw new Error('You do not have permission to perform this action.');
         }
-        
+
         // Parse response
         const data = await response.json().catch(() => ({}));
-        
+
         if (!response.ok) {
             throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
         }
-        
+
         return data;
     } catch (error) {
         console.error(`API Error [${endpoint}]:`, error);
@@ -81,19 +81,19 @@ export const driverAPI = {
     // Profile
     getProfile: () => apiRequest('/profile'),
     updateProfile: (data) => apiRequest('/profile', { method: 'PUT', body: JSON.stringify(data) }),
-    
+
     // Wallet
     getWallet: () => apiRequest('/profile/wallet'),
     topUpWallet: (amount, method) => apiRequest('/payment/wallet/topup', {
         method: 'POST',
         body: JSON.stringify({ amount, paymentMethod: method })
     }),
-    
+
     // Stations
     getAllStations: () => apiRequest('/stations'),
     getStationById: (stationId) => apiRequest(`/stations/${stationId}`),
     getNearbyStations: (lat, lng, radius = 10) => apiRequest(`/stations/nearby?lat=${lat}&lng=${lng}&radius=${radius}`),
-    
+
     // Reservations
     createReservation: (stationId, chargerId, startTime) => apiRequest('/reservations', {
         method: 'POST',
@@ -101,7 +101,7 @@ export const driverAPI = {
     }),
     getMyReservations: () => apiRequest('/reservations/my'),
     cancelReservation: (reservationId) => apiRequest(`/reservations/${reservationId}`, { method: 'DELETE' }),
-    
+
     // Charging Sessions
     startSession: (chargerId, stationId) => apiRequest('/charging/start', {
         method: 'POST',
@@ -112,11 +112,15 @@ export const driverAPI = {
         method: 'POST',
         body: JSON.stringify({ sessionId })
     }),
-    
+
     // History
-    getChargingHistory: (userId) => apiRequest(`/charging/history?userId=${userId || getUserId()}`),
+    getChargingHistory: async (userId) => {
+        const data = await apiRequest('/history/charging');
+        const sessions = Array.isArray(data) ? data : (data.history || data.sessions || []);
+        return sessions;
+    },
     getSessionDetail: (sessionId) => apiRequest(`/charging/session/${sessionId}`),
-    
+
     // Payment
     paySession: (sessionId, paymentMethod) => apiRequest('/payment/charge', {
         method: 'POST',
@@ -131,16 +135,16 @@ export const staffAPI = {
     getAssignedStations: () => apiRequest('/staff/stations'),
     getStationStatus: (stationId) => apiRequest(`/staff/stations/${stationId}/status`),
     getChargerStatus: (chargerId) => apiRequest(`/staff/chargers/${chargerId}/status`),
-    
+
     // Active Sessions
     getActiveSessions: (stationId = null) => {
-        const endpoint = stationId 
+        const endpoint = stationId
             ? `/staff/sessions/active?stationId=${stationId}`
             : '/staff/sessions/active';
         return apiRequest(endpoint);
     },
     getSessionDetails: (sessionId) => apiRequest(`/staff/sessions/${sessionId}`),
-    
+
     // Session Management
     startSessionForDriver: (driverId, chargerId) => apiRequest('/staff/sessions/start', {
         method: 'POST',
@@ -150,7 +154,7 @@ export const staffAPI = {
         method: 'POST',
         body: JSON.stringify({ sessionId, reason })
     }),
-    
+
     // Cash Payment
     processCashPayment: (sessionId, amount, notes) => apiRequest('/staff/payments/cash', {
         method: 'POST',
@@ -164,7 +168,7 @@ export const staffAPI = {
         if (params.toString()) endpoint += '?' + params.toString();
         return apiRequest(endpoint);
     },
-    
+
     // Incident Reporting
     reportIncident: (stationId, chargerId, type, description, severity = 'MEDIUM') => apiRequest('/staff/incidents', {
         method: 'POST',
@@ -182,7 +186,7 @@ export const staffAPI = {
         method: 'PUT',
         body: JSON.stringify({ status, notes })
     }),
-    
+
     // Charger Control
     enableCharger: (chargerId) => apiRequest(`/staff/chargers/${chargerId}/enable`, { method: 'POST' }),
     disableCharger: (chargerId, reason) => apiRequest(`/staff/chargers/${chargerId}/disable`, {
@@ -213,7 +217,7 @@ export const adminAPI = {
         method: 'POST',
         body: JSON.stringify({ staffId, stationId })
     }),
-    
+
     // Stations Management
     getAllStations: (status = null) => {
         let endpoint = '/admin/stations';
@@ -229,7 +233,7 @@ export const adminAPI = {
         body: JSON.stringify(stationData)
     }),
     deleteStation: (stationId) => apiRequest(`/admin/stations/${stationId}`, { method: 'DELETE' }),
-    
+
     // Chargers Management
     getChargersByStation: (stationId) => apiRequest(`/admin/stations/${stationId}/chargers`),
     createCharger: (chargerData) => apiRequest('/admin/chargers', {
@@ -245,7 +249,7 @@ export const adminAPI = {
         method: 'POST',
         body: JSON.stringify({ action })
     }),
-    
+
     // Reports & Analytics
     getRevenueReport: (startDate, endDate, groupBy = 'day') => apiRequest(
         `/admin/reports/revenue?startDate=${startDate}&endDate=${endDate}&groupBy=${groupBy}`
@@ -263,7 +267,7 @@ export const adminAPI = {
     getStationPerformance: (stationId, period = 'month') => apiRequest(
         `/admin/reports/station-performance/${stationId}?period=${period}`
     ),
-    
+
     // Subscription Plans
     getAllPlans: () => apiRequest('/admin/plans'),
     createPlan: (planData) => apiRequest('/admin/plans', {
@@ -275,7 +279,7 @@ export const adminAPI = {
         body: JSON.stringify(planData)
     }),
     deletePlan: (planId) => apiRequest(`/admin/plans/${planId}`, { method: 'DELETE' }),
-    
+
     // Support Tickets
     getAllTickets: (status = null) => {
         let endpoint = '/admin/support/tickets';
@@ -287,7 +291,7 @@ export const adminAPI = {
         method: 'PUT',
         body: JSON.stringify({ status, response })
     }),
-    
+
     // Incidents Management (Admin view)
     getAllIncidents: (status = null, severity = null) => {
         let endpoint = '/admin/incidents';
@@ -317,22 +321,22 @@ export class RealtimeConnection {
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
     }
-    
+
     connect() {
         const wsUrl = API_BASE_URL.replace('http', 'ws') + this.endpoint;
         this.ws = new WebSocket(wsUrl);
-        
+
         this.ws.onopen = () => {
             console.log('WebSocket connected');
             this.reconnectAttempts = 0;
-            
+
             // Send auth token
             const token = getAuthToken();
             if (token) {
                 this.ws.send(JSON.stringify({ type: 'auth', token }));
             }
         };
-        
+
         this.ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
@@ -341,18 +345,18 @@ export class RealtimeConnection {
                 console.error('Failed to parse WebSocket message:', error);
             }
         };
-        
+
         this.ws.onerror = (error) => {
             console.error('WebSocket error:', error);
             if (this.onError) this.onError(error);
         };
-        
+
         this.ws.onclose = () => {
             console.log('WebSocket closed');
             this.reconnect();
         };
     }
-    
+
     reconnect() {
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++;
@@ -360,13 +364,13 @@ export class RealtimeConnection {
             setTimeout(() => this.connect(), 3000);
         }
     }
-    
+
     send(data) {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify(data));
         }
     }
-    
+
     disconnect() {
         if (this.ws) {
             this.ws.close();

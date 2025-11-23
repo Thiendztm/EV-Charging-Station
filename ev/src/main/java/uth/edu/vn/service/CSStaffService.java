@@ -140,7 +140,7 @@ public class CSStaffService {
         // Đã đổi chargingSession.getId() thành chargingSession.getSessionId()
         // để phù hợp với tên trường ID trong Entity PhienSac (giả định)
         List<ThanhToan> existingPayments = thanhToanRepository
-                .findBySessionIdAndStatus(chargingSession.getSessionId(), "PAID");
+                .findBySessionIdAndStatus(chargingSession.getSessionId(), "COMPLETED");
 
         if (!existingPayments.isEmpty()) {
             logger.warn("Payment for session {} already processed.", sessionId);
@@ -155,11 +155,14 @@ public class CSStaffService {
         // uncomment dòng này
         // payment.setPhienSac(chargingSession);
 
+        // Gắn sessionId để lịch sử thanh toán truy vết được phiên sạc
+        payment.setSessionId(chargingSession.getSessionId());
         payment.setAmount(java.math.BigDecimal.valueOf(chargingSession.getTotalCost()));
 
         // Sử dụng String literal để tránh lỗi Enum
         payment.setMethod("CASH");
-        payment.setStatus("PAID");
+        // Dùng trạng thái COMPLETED để thống nhất với các luồng thanh toán khác
+        payment.setStatus("COMPLETED");
 
         payment.setCreatedAt(LocalDateTime.now());
 
