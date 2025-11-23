@@ -12,6 +12,7 @@ import uth.edu.vn.repository.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
@@ -105,10 +106,19 @@ public class CSStaffController {
                     sessionData.put("userId", session.getUser().getId());
                     sessionData.put("userName",
                             session.getUser().getFirstName() + " " + session.getUser().getLastName());
+                    sessionData.put("userEmail", session.getUser().getEmail());
                 } else {
                     sessionData.put("userId", null);
                     sessionData.put("userName", "Walk-in customer");
                 }
+
+                // Trạng thái và các thông số phiên sạc để hiển thị trong bảng
+                sessionData.put("status", session.getStatus() != null ? session.getStatus().name() : null);
+                sessionData.put("energyConsumed", session.getEnergyConsumed());
+                sessionData.put("currentCost", session.getTotalCost());
+                // SOC hiện tại: ưu tiên endSoc nếu có, fallback về startSoc
+                Integer currentSoc = session.getEndSoc() != null ? session.getEndSoc() : session.getStartSoc();
+                sessionData.put("currentSoc", currentSoc);
 
                 sessionList.add(sessionData);
             }
@@ -121,6 +131,10 @@ public class CSStaffController {
 
             Map<String, Object> summary = new HashMap<>();
             summary.put("totalChargers", chargers.size());
+            summary.put("availableChargers", availableCount);
+            summary.put("occupiedChargers", occupiedCount);
+            summary.put("outOfOrderChargers", outOfOrderCount);
+            // Giữ lại các key cũ để tương thích ngược nếu nơi khác đang dùng
             summary.put("available", availableCount);
             summary.put("occupied", occupiedCount);
             summary.put("outOfOrder", outOfOrderCount);
@@ -131,7 +145,12 @@ public class CSStaffController {
             response.put("station", stationData);
             response.put("summary", summary);
             response.put("chargers", chargerList);
+            // Cho staff/sessions.js
             response.put("activeSessions", sessionList);
+            response.put("sessions", sessionList);
+            // Cho updateStationStats() trong sessions.js
+            response.put("totalChargers", chargers.size());
+            response.put("availableChargers", availableCount);
             response.put("timestamp", LocalDateTime.now());
 
             return ResponseEntity.ok(response);
@@ -229,12 +248,15 @@ public class CSStaffController {
                 // Lấy thông tin session để trả về
                 PhienSac session = phienSacRepository.findById(sessionId).orElse(null);
                 if (session != null) {
+                    Double totalCost = session.getTotalCost() != null ? session.getTotalCost() : 0.0;
                     response.put("success", true);
                     response.put("message", "Dừng phiên sạc thành công");
+                    // Trường finalCost để staff/sessions.js hiển thị chi phí
+                    response.put("finalCost", totalCost);
                     response.put("session", Map.of(
                             "sessionId", session.getSessionId(),
                             "energyConsumed", session.getEnergyConsumed(),
-                            "totalCost", session.getTotalCost(),
+                            "totalCost", totalCost,
                             "startTime",
                             session.getStartTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
                             "endTime",
@@ -330,13 +352,113 @@ public class CSStaffController {
     }
 
     /**
-     * Alias cho staff/sessions.js & staff/payments.js
+     * Xác nhận thanh toán tại chỗ (cho staff/sessions.js & staff/payments.js)
      * POST /api/staff/payments/confirm
      */
     @PostMapping("/payments/confirm")
     public ResponseEntity<Map<String, Object>> confirmPayment(
             @RequestBody Map<String, Object> paymentData) {
-        return processCashPayment(paymentData);
+        try {
+            Long sessionId = Long.parseLong(paymentData.get("sessionId").toString());
+
+            // Các field bổ sung từ frontend (không bắt buộc lưu DB nhưng dùng cho hiển thị)
+            Double amountReceived = null;
+            if (paymentData.get("amountReceived") != null) {
+                amountReceived = Double.parseDouble(paymentData.get("amountReceived").toString());
+            }
+            String paymentMethod = paymentData.get("paymentMethod") != null
+                    ? paymentData.get("paymentMethod").toString()
+                    : "CASH";
+
+            // Xử lý thanh toán tiền mặt cốt lõi
+            ThanhToan payment = staffService.processCashPayment(sessionId);
+
+            Map<String, Object> response = new HashMap<>();
+            if (payment == null) {
+                response.put("success", false);
+                response.put("error",
+                        "Không thể xử lý thanh toán. Phiên sạc có thể chưa được dừng hoặc đã thanh toán trước đó.");
+                return ResponseEntity.badRequest().body(response);
+            }
+
+            // Lấy thông tin phiên sạc để dựng hóa đơn
+            PhienSac session = phienSacRepository.findById(sessionId).orElse(null);
+
+            String userName = "Walk-in customer";
+            if (session != null && session.getUser() != null) {
+                userName = (session.getUser().getFirstName() != null ? session.getUser().getFirstName() : "")
+                        + " "
+                        + (session.getUser().getLastName() != null ? session.getUser().getLastName() : "");
+            }
+
+            String stationName = null;
+            String chargerName = null;
+            Double pricePerKwh = 0.0;
+            if (session != null && session.getChargingPoint() != null) {
+                chargerName = session.getChargingPoint().getPointName();
+                pricePerKwh = session.getChargingPoint().getPricePerKwh();
+                if (session.getChargingPoint().getChargingStation() != null) {
+                    stationName = session.getChargingPoint().getChargingStation().getName();
+                }
+            }
+
+            Double energy = session != null && session.getEnergyConsumed() != null
+                    ? session.getEnergyConsumed()
+                    : 0.0;
+
+            Double totalCost = null;
+            if (payment.getAmount() != null) {
+                totalCost = payment.getAmount().doubleValue();
+            } else if (session != null && session.getTotalCost() != null) {
+                totalCost = session.getTotalCost();
+            } else if (energy != null && pricePerKwh != null) {
+                totalCost = energy * pricePerKwh;
+            } else {
+                totalCost = 0.0;
+            }
+
+            if (amountReceived == null || amountReceived <= 0) {
+                amountReceived = totalCost;
+            }
+            double changeAmount = Math.max(0.0, amountReceived - totalCost);
+
+            // Tính thời lượng
+            String durationStr = null;
+            if (session != null && session.getStartTime() != null && session.getEndTime() != null) {
+                Duration duration = Duration.between(session.getStartTime(), session.getEndTime());
+                long minutes = duration.toMinutes();
+                long hours = minutes / 60;
+                long mins = minutes % 60;
+                durationStr = String.format("%dh %dm", hours, mins);
+            }
+
+            Map<String, Object> paymentInfo = new HashMap<>();
+            paymentInfo.put("id", payment.getId());
+            paymentInfo.put("transactionId", payment.getId());
+            paymentInfo.put("paymentTime", payment.getCreatedAt());
+            paymentInfo.put("userName", userName);
+            paymentInfo.put("stationName", stationName);
+            paymentInfo.put("chargerName", chargerName);
+            paymentInfo.put("energyConsumed", energy);
+            paymentInfo.put("pricePerKwh", pricePerKwh);
+            paymentInfo.put("duration", durationStr);
+            paymentInfo.put("totalCost", totalCost);
+            paymentInfo.put("paymentMethod", paymentMethod != null ? paymentMethod : payment.getMethod());
+            paymentInfo.put("amountReceived", amountReceived);
+            paymentInfo.put("changeAmount", changeAmount);
+
+            response.put("success", true);
+            response.put("message", "Thanh toán thành công");
+            response.put("payment", paymentInfo);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "Lỗi khi xử lý thanh toán: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
     }
 
     // ==================== INCIDENT REPORTING ====================

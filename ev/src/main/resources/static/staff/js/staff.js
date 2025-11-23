@@ -2,9 +2,9 @@
  * Main entry point for Staff Dashboard
  */
 
-import { state } from './data.js';
+import { API_BASE_URL, state } from './data.js';
 import { loadStations } from './stations.js';
-import { showNotification } from './utils.js';
+import { fetchWithAuth, showNotification } from './utils.js';
 import { loadActiveSessions, startAutoRefresh, stopAutoRefresh } from './sessions.js';
 import { showPaymentModal } from './payments.js';
 
@@ -36,20 +36,20 @@ function setupNavigation() {
   menuItems.forEach(item => {
     item.addEventListener('click', () => {
       const page = item.dataset.page;
-      
+
       // Update active menu
       menuItems.forEach(mi => mi.classList.remove('active'));
       item.classList.add('active');
-      
+
       // Stop auto-refresh when leaving monitoring
       if (state.currentPage === 'monitoring' && page !== 'monitoring') {
         stopAutoRefresh();
       }
-      
+
       // Update page title and content
       state.currentPage = page;
-      
-      switch(page) {
+
+      switch (page) {
         case 'monitoring':
           pageTitle.textContent = 'Giám sát điểm sạc';
           renderMonitoringPage();
@@ -69,7 +69,7 @@ function setupNavigation() {
 
 function renderMonitoringPage() {
   const content = document.getElementById('content');
-  
+
   content.innerHTML = `
     <!-- Stats Cards -->
     <div class="stats-grid">
@@ -111,6 +111,8 @@ function renderMonitoringPage() {
         </select>
       </div>
     </div>
+
+    <div id="monitoringContent"></div>
 
     <!-- Active Sessions Table -->
     <div class="card" style="padding: 0; overflow: hidden;">
@@ -172,7 +174,7 @@ function renderMonitoringPage() {
 
 function renderPaymentsPage() {
   const content = document.getElementById('content');
-  
+
   content.innerHTML = `
     <div class="grid">
       <div class="card">
@@ -221,7 +223,7 @@ function renderPaymentsPage() {
 
 function renderIncidentsPage() {
   const content = document.getElementById('content');
-  
+
   content.innerHTML = `
     <div class="grid">
       <div class="card">
@@ -283,7 +285,7 @@ function renderIncidentsPage() {
 
   // Load station select for incidents
   loadStations();
-  
+
   // Setup incident form handler
   const form = document.getElementById('incidentForm');
   form.addEventListener('submit', handleIncidentReport);
@@ -291,21 +293,69 @@ function renderIncidentsPage() {
 
 async function handleIncidentReport(e) {
   e.preventDefault();
-  
+
   const stationId = document.getElementById('incidentStation').value;
   const chargerId = document.getElementById('incidentCharger').value;
   const type = document.getElementById('incidentType').value;
   const severity = document.getElementById('incidentSeverity').value;
   const description = document.getElementById('incidentDescription').value;
 
-  // TODO: Implement API call to report incident
-  // POST /api/staff/incidents
-  showNotification('Chức năng báo cáo sự cố đang được phát triển', 'warning');
+  if (!stationId || !description) {
+    showNotification('Vui lòng chọn trạm và nhập mô tả sự cố', 'error');
+    return;
+  }
+
+  try {
+    const payload = {
+      stationId,
+      pointId: chargerId || null,
+      type,
+      severity,
+      description
+    };
+
+    const response = await fetchWithAuth(`${API_BASE_URL}/staff/incident`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      showNotification('Đã gửi báo cáo sự cố thành công', 'success');
+
+      // Reset form
+      e.target.reset();
+
+      // Hiển thị tóm tắt trong danh sách sự cố gần đây
+      const list = document.getElementById('incidentsList');
+      if (list) {
+        if (list.querySelector('p')) {
+          list.innerHTML = '';
+        }
+        const item = document.createElement('div');
+        item.className = 'incident-item';
+        item.style.padding = '8px 0';
+        item.style.borderBottom = '1px solid var(--border)';
+        item.innerHTML = `
+          <div style="font-weight: 500;">Trạm ${stationId}${chargerId ? ' - Charger ' + chargerId : ''}</div>
+          <div style="font-size: 12px; color: var(--muted);">${type} • ${severity}</div>
+          <div style="font-size: 13px; margin-top: 4px;">${description}</div>
+        `;
+        list.prepend(item);
+      }
+    } else {
+      showNotification(data.error || 'Không thể gửi báo cáo sự cố', 'error');
+    }
+  } catch (err) {
+    console.error('Error reporting incident:', err);
+    showNotification('Lỗi kết nối đến máy chủ', 'error');
+  }
 }
 
 // Refresh button handler
 document.getElementById('refreshBtn')?.addEventListener('click', () => {
-  switch(state.currentPage) {
+  switch (state.currentPage) {
     case 'monitoring':
       const stationId = localStorage.getItem('staffStationId');
       if (stationId) {
@@ -322,15 +372,15 @@ document.getElementById('refreshBtn')?.addEventListener('click', () => {
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
   if (!checkAuth()) return;
-  
+
   setupNavigation();
   renderMonitoringPage(); // Default page
-  
+
   // Display staff name
   const userName = localStorage.getItem('userName') || 'Staff';
   const userEmail = localStorage.getItem('userEmail') || '';
   document.querySelector('.brand span').textContent = userName;
-  
+
   // Add logout to topbar
   const topbar = document.querySelector('.topbar-actions');
   if (topbar) {

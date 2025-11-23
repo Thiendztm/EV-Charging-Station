@@ -15,23 +15,24 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class AuthResponse {
-    
+
     private String accessToken;
     private String refreshToken;
-    
+
     @Builder.Default
     private String tokenType = "Bearer";
-    
+
     private Long expiresIn; // seconds
-    
+
     // User info
     private Long userId;
     private String email;
     private String firstName;
     private String lastName;
+    private String name; // convenience full name for frontend display
     private String role;
     private String phoneNumber;
-    
+
     /**
      * Constructor đơn giản chỉ với token
      * Dùng cho trường hợp chỉ cần trả về token

@@ -16,7 +16,7 @@ let refreshInterval = null;
 export async function loadActiveSessions(stationId) {
     try {
         const response = await fetchWithAuth(`${API_BASE_URL}/staff/station/${stationId}/status`);
-        
+
         if (response.ok) {
             const data = await response.json();
             activeSessions = data.sessions || [];
@@ -101,9 +101,13 @@ function updateStationStats(data) {
     const totalChargers = data.totalChargers || 0;
     const availableChargers = data.availableChargers || 0;
 
-    document.getElementById('activeSessionsCount')?.textContent = activeCount;
-    document.getElementById('totalChargersCount')?.textContent = totalChargers;
-    document.getElementById('availableChargersCount')?.textContent = availableChargers;
+    const activeEl = document.getElementById('activeSessionsCount');
+    const totalEl = document.getElementById('totalChargersCount');
+    const availableEl = document.getElementById('availableChargersCount');
+
+    if (activeEl) activeEl.textContent = activeCount;
+    if (totalEl) totalEl.textContent = totalChargers;
+    if (availableEl) availableEl.textContent = availableChargers;
 }
 
 /**
@@ -121,7 +125,7 @@ export async function startSession(chargerId, userId) {
         if (response.ok) {
             const data = await response.json();
             showSuccess('Đã bắt đầu phiên sạc thành công!');
-            
+
             // Refresh sessions list
             const stationId = getCurrentStationId();
             if (stationId) {
@@ -143,7 +147,7 @@ export async function startSession(chargerId, userId) {
 export async function stopSession(sessionId) {
     // Show confirmation dialog with final details input
     const modal = showStopSessionModal(sessionId);
-    
+
     // Wait for user input
     return new Promise((resolve) => {
         window.confirmStopSession = async (endSoc, notes) => {
@@ -156,16 +160,16 @@ export async function stopSession(sessionId) {
                 if (response.ok) {
                     const data = await response.json();
                     showSuccess(`Đã dừng phiên sạc. Chi phí: ${formatCurrency(data.finalCost)}`);
-                    
+
                     // Close modal
                     closeModal(modal);
-                    
+
                     // Refresh sessions list
                     const stationId = getCurrentStationId();
                     if (stationId) {
                         await loadActiveSessions(stationId);
                     }
-                    
+
                     resolve(true);
                 } else {
                     const error = await response.json();
@@ -270,7 +274,7 @@ export async function confirmPayment(sessionId, amount, method) {
 
         if (response.ok) {
             showSuccess('Đã xác nhận thanh toán thành công!');
-            
+
             // Refresh sessions
             const stationId = getCurrentStationId();
             if (stationId) {
