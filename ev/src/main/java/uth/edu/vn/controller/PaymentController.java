@@ -39,6 +39,9 @@ public class PaymentController {
     @Autowired
     private ThanhToanRepository thanhToanRepository;
 
+    @Autowired
+    private ChargerRepository chargerRepository;
+
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     // ==================== WALLET MANAGEMENT ====================
@@ -257,6 +260,113 @@ public class PaymentController {
             Authentication authentication,
             @RequestBody Map<String, Object> paymentData) {
         return processPayment(authentication, paymentData);
+    }
+
+    @PostMapping("/simulate-charge-session")
+    public ResponseEntity<Map<String, Object>> simulateChargeSession(
+            Authentication authentication,
+            @RequestBody Map<String, Object> request) {
+        try {
+            if (authentication == null) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("error", "Yêu cầu đăng nhập");
+                return ResponseEntity.status(401).body(errorResponse);
+            }
+
+            String email = authentication.getName();
+            User user = userRepository.findByEmail(email).orElse(null);
+
+            if (user == null) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("error", "Không tìm thấy người dùng");
+                return ResponseEntity.notFound().build();
+            }
+
+            Object chargerIdObj = request.get("chargerId");
+            if (chargerIdObj == null) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("error", "Thiếu chargerId trong request");
+                return ResponseEntity.badRequest().body(errorResponse);
+            }
+
+            Long chargerId = Long.parseLong(chargerIdObj.toString());
+
+            Charger charger = chargerRepository.findById(chargerId).orElse(null);
+            if (charger == null) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("error", "Không tìm thấy điểm sạc");
+                return ResponseEntity.badRequest().body(errorResponse);
+            }
+
+            Double energy = null;
+            Object energyObj = request.get("energyKwh");
+            if (energyObj != null) {
+                energy = Double.parseDouble(energyObj.toString());
+            }
+            if (energy == null || energy <= 0) {
+                energy = 20.0;
+            }
+
+            Integer durationMinutes = 30;
+            Object durationObj = request.get("durationMinutes");
+            if (durationObj != null) {
+                durationMinutes = Integer.parseInt(durationObj.toString());
+            }
+
+            Double pricePerKwh = charger.getPricePerKwh();
+            if (pricePerKwh == null || pricePerKwh <= 0) {
+                pricePerKwh = 3000.0;
+            }
+
+            Double totalCost = energy * pricePerKwh;
+
+            LocalDateTime endTime = LocalDateTime.now();
+            LocalDateTime startTime = endTime.minusMinutes(durationMinutes);
+
+            PhienSac session = new PhienSac();
+            session.setUser(user);
+            session.setChargingPoint(charger);
+            session.setStartTime(startTime);
+            session.setEndTime(endTime);
+            session.setEnergyConsumed(energy);
+            session.setStartSoc(20);
+            session.setEndSoc(80);
+            session.setTotalCost(totalCost);
+            session.setStatus(SessionStatus.COMPLETED);
+            session.setQrCode("SIM-" + UUID.randomUUID());
+            session.setCreatedAt(startTime);
+            session.setUpdatedAt(endTime);
+
+            session = phienSacRepository.save(session);
+
+            Object methodObj = request.get("paymentMethod");
+            String methodStr = methodObj != null ? methodObj.toString() : "SIMULATED";
+
+            ThanhToan payment = new ThanhToan(
+                    session.getSessionId(),
+                    java.math.BigDecimal.valueOf(totalCost),
+                    methodStr);
+            payment.setStatus("COMPLETED");
+            payment = thanhToanRepository.save(payment);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Phiên sạc giả lập đã được tạo");
+            response.put("sessionId", session.getSessionId());
+            response.put("totalCost", totalCost);
+            response.put("energyConsumed", energy);
+            response.put("stationName",
+                    charger.getChargingStation() != null ? charger.getChargingStation().getName() : null);
+            response.put("paymentId", payment.getId());
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "Lỗi khi giả lập phiên sạc: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
     }
 
     /**

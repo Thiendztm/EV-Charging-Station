@@ -12,7 +12,7 @@ function tram(name, lat, lng, connector, status, power, price, address, distance
     this.totalChargers = totalChargers || 0;
     this.availableChargers = availableChargers || 0;
 
-    this.hienThiThongTin = function() {
+    this.hienThiThongTin = function () {
         console.log(`--- Thông tin trạm sạc ---`);
         console.log(`Tên: ${this.name}`);
         console.log(`Địa chỉ: ${this.address}`);
@@ -21,11 +21,11 @@ function tram(name, lat, lng, connector, status, power, price, address, distance
         console.log(`Giá: ${this.price}đ/kWh`);
     };
 
-    this.conTrong = function() {
+    this.conTrong = function () {
         return this.status === 'available';
     };
 
-    this.capNhatTrangThai = function(newStatus) {
+    this.capNhatTrangThai = function (newStatus) {
         this.status = newStatus;
         console.log(`Trạm ${this.name} đã được cập nhật trạng thái thành: ${newStatus}`);
     };
@@ -49,8 +49,8 @@ let availableIcon, occupiedIcon, userIcon;
 
 function initIcons() {
     availableIcon = L.divIcon({
-    className: 'custom-marker',
-    html: `<div style="
+        className: 'custom-marker',
+        html: `<div style="
         background: #00FF00;
         width: 32px;
         height: 32px;
@@ -64,14 +64,14 @@ function initIcons() {
     ">
         <span style="transform: rotate(45deg); color: white; font-size: 16px;">⚡</span>
     </div>`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-    popupAnchor: [0, -32]
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+        popupAnchor: [0, -32]
     });
 
     occupiedIcon = L.divIcon({
-    className: 'custom-marker',
-    html: `<div style="
+        className: 'custom-marker',
+        html: `<div style="
         background: #FF0000;
         width: 32px;
         height: 32px;
@@ -85,14 +85,14 @@ function initIcons() {
     ">
         <span style="transform: rotate(45deg); color: white; font-size: 16px;">🔌</span>
     </div>`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-    popupAnchor: [0, -32]
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+        popupAnchor: [0, -32]
     });
 
     userIcon = L.divIcon({
-    className: 'user-marker',
-    html: `<div style="
+        className: 'user-marker',
+        html: `<div style="
         background: #007bff;
         width: 20px;
         height: 20px;
@@ -100,8 +100,8 @@ function initIcons() {
         border: 3px solid #FFFFFF;
         box-shadow: 0 0 0 2px #007bff, 0 3px 10px rgba(0,0,0,0.3);
     "></div>`,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10]
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
     });
 }
 
@@ -121,7 +121,7 @@ function showStationsWarning(message) {
                 </div>`;
             list.prepend(note);
         }
-    } catch(e) { /* no-op */ }
+    } catch (e) { /* no-op */ }
 }
 
 // =====================================================
@@ -134,7 +134,7 @@ async function loadStationsFromAPI() {
             throw new Error(`Tải trạm thất bại (HTTP ${response.status})`);
         }
         const data = await response.json();
-        
+
         if (data && Array.isArray(data.stations)) {
             return data.stations.map(station => {
                 // connectorTypes is a map; pick the first key as representative
@@ -183,13 +183,13 @@ function getFallbackStations() {
 // =====================================================
 async function initMap() {
     console.log('🗺️ Initializing Leaflet Map...');
-    
+
     try {
         // Kiểm tra Leaflet library
         if (typeof L === 'undefined') {
             throw new Error("Leaflet library not loaded!");
         }
-        
+
         // Khởi tạo icons sau khi Leaflet loaded
         initIcons();
 
@@ -231,7 +231,7 @@ async function initMap() {
         const bounds = [];
         stations.forEach((station) => {
             const icon = station.status === 'available' ? availableIcon : occupiedIcon;
-            
+
             const marker = L.marker([station.lat, station.lng], { icon: icon })
                 .addTo(markerLayer);
 
@@ -249,9 +249,9 @@ async function initMap() {
                                 border-radius: 12px;
                                 font-size: 12px;
                                 font-weight: 600;
-                                ${station.status === 'available' 
-                                    ? 'background: #d4edda; color: #155724;' 
-                                    : 'background: #f8d7da; color: #721c24;'}
+                                ${station.status === 'available'
+                    ? 'background: #d4edda; color: #155724;'
+                    : 'background: #f8d7da; color: #721c24;'}
                             ">
                                 ${station.status === 'available' ? '✓ Trống' : '✗ Đang dùng'}
                             </span>
@@ -262,8 +262,8 @@ async function initMap() {
                         <p style="margin: 6px 0;"><strong>Địa chỉ:</strong> ${station.address}</p>
                     </div>
                     <div class="action-row" style="margin-top: 15px; display: flex; gap: 10px;">
-                        ${station.status === 'available' 
-                            ? `<button onclick="startBooking('${station.id}')" style="
+                        ${station.status === 'available'
+                    ? `<button onclick="startBooking('${station.id}')" style="
                                 flex: 1;
                                 padding: 10px 20px;
                                 background: #4CAF50;
@@ -277,7 +277,7 @@ async function initMap() {
                             " onmouseover="this.style.background='#45a049'" onmouseout="this.style.background='#4CAF50'">
                                 📍 Đặt chỗ
                             </button>`
-                            : `<button disabled style="
+                    : `<button disabled style="
                                 flex: 1;
                                 padding: 10px 20px;
                                 background: #ccc;
@@ -290,7 +290,7 @@ async function initMap() {
                             ">
                                 ✗ Đã đặt chỗ
                             </button>`
-                        }
+                }
                         <button onclick="map.setView([${station.lat}, ${station.lng}], 16)" style="
                             padding: 10px 20px;
                             background: #007bff;
@@ -321,16 +321,16 @@ async function initMap() {
 
         updateStationList();
         initSearchFunctionality(stations);
-        
+
         // Gán sự kiện cho nút vị trí hiện tại
         const locBtn = document.getElementById("currentLocation");
         if (locBtn) locBtn.addEventListener("click", getCurrentLocation);
-        
+
         // Áp dụng kết quả thanh toán (nếu có)
         applyBookingFromStorage();
-        
+
         console.log('✅ Map initialization complete!');
-        
+
     } catch (error) {
         console.error("❌ Leaflet Map Error:", error.message);
         showMapError(error.message);
@@ -375,9 +375,9 @@ async function getCurrentLocation() {
         alert("Trình duyệt không hỗ trợ geolocation hoặc map chưa load.");
         return;
     }
-    
+
     console.log('📍 Getting current location...');
-    
+
     try {
         const position = await new Promise((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(resolve, reject, {
@@ -386,14 +386,14 @@ async function getCurrentLocation() {
                 maximumAge: 0
             });
         });
-        
+
         const userLocation = [position.coords.latitude, position.coords.longitude];
-        
+
         // Remove old user marker if exists
         if (userMarker) {
             markerLayer.removeLayer(userMarker);
         }
-        
+
         // Add new user marker (blue dot)
         userMarker = L.marker(userLocation, { icon: userIcon })
             .addTo(markerLayer)
@@ -403,16 +403,16 @@ async function getCurrentLocation() {
                 </div>
             `)
             .openPopup();
-        
+
         // Pan and zoom to user location
         map.setView(userLocation, 14);
-        
+
         console.log('✅ User location found:', userLocation);
-        
+
         // Calculate distances to all stations
         calculateDistances(position.coords.latitude, position.coords.longitude);
         updateStationList();
-        
+
     } catch (error) {
         console.error('❌ Geolocation error:', error);
         alert("Không thể lấy vị trí hiện tại: " + error.message);
@@ -433,8 +433,8 @@ function getDistance(lat1, lng1, lat2, lng2) {
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLng = (lng2 - lng1) * Math.PI / 180;
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLng / 2) * Math.sin(dLng / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
 }
@@ -445,7 +445,7 @@ function getDistance(lat1, lng1, lat2, lng2) {
 function initSearchFunctionality(stations) {
     const searchInput = document.getElementById("searchInput");
     if (!searchInput) return;
-    
+
     searchInput.addEventListener("input", () => {
         filterMarkers(stations);
         updateStationList();
@@ -456,10 +456,10 @@ function filterMarkers(stations) {
     const searchQuery = (document.getElementById('searchInput')?.value || '').trim().toLowerCase();
 
     markers.forEach(({ marker, station }) => {
-        const matchesSearch = !searchQuery || 
-            station.name.toLowerCase().includes(searchQuery) || 
+        const matchesSearch = !searchQuery ||
+            station.name.toLowerCase().includes(searchQuery) ||
             station.address.toLowerCase().includes(searchQuery);
-        
+
         if (matchesSearch) {
             markerLayer.addLayer(marker);
         } else {
@@ -474,7 +474,7 @@ function filterMarkers(stations) {
 function updateStationList() {
     const listContent = document.getElementById("listContent");
     if (!listContent) return;
-    
+
     let html = '';
     const visibleStations = markers.filter(item => markerLayer.hasLayer(item.marker));
 
@@ -498,10 +498,10 @@ function updateStationList() {
                 </p>
                 <p class="distance">📍 ${station.distance}</p>
                 <div class="action-row">
-                    ${isAvailable 
-                        ? `<button data-id="${station.id}" class="btn-book" onclick="startBooking('${station.id}')">Đặt chỗ</button>`
-                        : `<button class="btn-busy" disabled>Đã đặt chỗ</button>`
-                    }
+                    ${isAvailable
+                ? `<button data-id="${station.id}" class="btn-book" onclick="startBooking('${station.id}')">Đặt chỗ</button>`
+                : `<button class="btn-busy" disabled>Đã đặt chỗ</button>`
+            }
                 </div>
             </div>
         `;
@@ -518,7 +518,7 @@ function updateStationList() {
 async function startBooking(stationId) {
     // Use accessToken saved by auth.js
     const token = localStorage.getItem('accessToken');
-    
+
     if (!token) {
         if (confirm('Bạn cần đăng nhập để đặt chỗ. Chuyển đến trang đăng nhập?')) {
             window.location.href = 'login.html?redirect=index.html';
@@ -722,6 +722,8 @@ async function submitBooking(stationId) {
                 price: (markers.find(m => String(m.station.id) === String(stationId))?.station.price) || 0
             };
             localStorage.setItem('bookingStation', JSON.stringify(bookingStation));
+            // Lưu chargerId để trang thanh toán có thể tạo phiên sạc giả
+            localStorage.setItem('currentChargerId', String(chargerId));
             // Nếu backend trả về sessionId/bookingId thì lưu lại
             if (data.sessionId) {
                 localStorage.setItem('currentSessionId', String(data.sessionId));

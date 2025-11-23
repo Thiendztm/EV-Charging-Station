@@ -59,42 +59,48 @@ async function updateWalletDisplay() {
     }
 }
 
-// API call để thanh toán qua ví (trừ tiền và tạo transaction)
-async function processWalletPayment(amount, sessionId) {
-    const token = localStorage.getItem('accessToken'); // (đã sửa)
-    if (!token) {
-        console.error('No auth token found');
-        return { success: false, message: 'Vui lòng đăng nhập' };
+// Tạo phiên sạc giả đã hoàn thành sau khi thanh toán thành công
+async function simulateChargingSessionForCurrentBooking(total, method) {
+    const token = localStorage.getItem('accessToken');
+    const chargerId = localStorage.getItem('currentChargerId');
+
+    if (!token || !chargerId) {
+        console.warn('Thiếu token hoặc currentChargerId, bỏ qua giả lập phiên sạc');
+        return;
     }
 
+    const price = window.currentStationPrice || 0;
+    let energyKwh = 20.0;
+    if (price > 0 && total > 0) {
+        energyKwh = total / price;
+    }
+
+    const payload = {
+        chargerId: parseInt(chargerId, 10),
+        energyKwh: energyKwh,
+        durationMinutes: 60,
+        paymentMethod: method || 'SIMULATED'
+    };
+
     try {
-        const response = await fetch(`${API_BASE_URL}/payment/wallet`, {
+        const response = await fetch(`${API_BASE_URL}/payment/simulate-charge-session`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({
-                amount: amount,
-                sessionId: sessionId || null,
-                planType: currentPlan,
-                description: `Thanh toán ${document.getElementById('selectedPlan').textContent}`
-            })
+            body: JSON.stringify(payload)
         });
 
-        const data = await response.json();
-        
-        if (response.ok && data.success) {
-            // Cập nhật số dư mới từ server
-            localStorage.setItem('walletBalance', data.newBalance.toString());
-            updateWalletDisplay();
-            return { success: true, newBalance: data.newBalance };
-        } else {
-            return { success: false, message: data.message || 'Thanh toán thất bại' };
+        if (!response.ok) {
+            console.error('Failed to simulate charging session:', response.status);
+            return;
         }
+
+        const data = await response.json();
+        console.log('Simulated charging session created:', data);
     } catch (error) {
-        console.error('Error processing payment:', error);
-        return { success: false, message: 'Lỗi kết nối. Vui lòng thử lại.' };
+        console.error('Error simulating charging session:', error);
     }
 }
 
@@ -102,7 +108,7 @@ async function processWalletPayment(amount, sessionId) {
 document.addEventListener('DOMContentLoaded', () => {
     // --- Load và hiển thị số dư ví ---
     updateWalletDisplay();
-    
+
     // --- Điền thông tin trạm sạc từ localStorage ---
     const saved = localStorage.getItem('bookingStation');
     if (!saved) {
@@ -243,11 +249,11 @@ document.getElementById('paymentForm')?.addEventListener('submit', async (e) => 
         const originalText = submitBtn.innerHTML;
         submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang xử lý...';
         submitBtn.disabled = true;
-        
+
         try {
             // Get current balance first
             const currentBalance = await fetchWalletBalance();
-            
+
             if (currentBalance < total) {
                 alert(`Số dư ví không đủ!\nSố dư hiện tại: ${currentBalance.toLocaleString('vi-VN')}đ\nSố tiền cần thanh toán: ${total.toLocaleString('vi-VN')}đ`);
                 submitBtn.innerHTML = originalText;
@@ -255,20 +261,19 @@ document.getElementById('paymentForm')?.addEventListener('submit', async (e) => 
                 return;
             }
 
-            // Process payment via backend
-            const sessionId = localStorage.getItem('currentSessionId') || null;
-            const result = await processWalletPayment(total, sessionId);
-            
-            if (result.success) {
-                alert(`Thanh toán thành công bằng Ví EV!\nĐã trừ: ${total.toLocaleString('vi-VN')}đ\nSố dư còn lại: ${result.newBalance.toLocaleString('vi-VN')}đ`);
-                
-                localStorage.setItem('bookingStatus', 'success');
-                // Clear session if exists
-                localStorage.removeItem('currentSessionId');
-                window.location.href = 'index.html';
-            } else {
-                alert(`Thanh toán thất bại!\n${result.message}`);
-            }
+            // Giả lập thanh toán + tạo phiên sạc hoàn thành (không trừ ví thực tế trên server)
+            await simulateChargingSessionForCurrentBooking(total, 'WALLET');
+
+            const newBalance = currentBalance - total;
+            localStorage.setItem('walletBalance', String(newBalance));
+            updateWalletDisplay();
+
+            alert(`Thanh toán (giả lập) thành công bằng Ví EV!\nĐã trừ: ${total.toLocaleString('vi-VN')}đ\nSố dư còn lại (tạm tính): ${newBalance.toLocaleString('vi-VN')}đ`);
+
+            localStorage.setItem('bookingStatus', 'success');
+            // Clear session if exists
+            localStorage.removeItem('currentSessionId');
+            window.location.href = 'index.html';
         } catch (error) {
             console.error('Payment error:', error);
             alert('Có lỗi xảy ra khi xử lý thanh toán! Vui lòng thử lại.');
@@ -291,10 +296,15 @@ document.getElementById('paymentForm')?.addEventListener('submit', async (e) => 
                 const submitBtn = document.querySelector('.btn-pay');
                 submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Xác thực OTP...';
                 submitBtn.disabled = true;
-                
+
                 // Simulate OTP verification (replace with real API call)
-                setTimeout(() => {
+                setTimeout(async () => {
                     alert(`Thanh toán thành công bằng ${method === 'bank' ? 'Ngân hàng' : 'Thẻ tín dụng'}!`);
+
+                    // Tạo phiên sạc giả sau khi thanh toán thành công
+                    const paymentMethod = method === 'bank' ? 'BANK_TRANSFER' : 'CARD';
+                    await simulateChargingSessionForCurrentBooking(total, paymentMethod);
+
                     otpSection.style.display = 'none';
                     this.value = '';
                     otpInput.removeEventListener('input', handler);

@@ -43,7 +43,7 @@ async function fetchAndUpdateWalletBalance() {
     } catch (error) {
         console.error('Error fetching wallet balance:', error);
     }
-    
+
     // Fallback to localStorage
     return parseFloat(localStorage.getItem('walletBalance') || '0');
 }
@@ -51,7 +51,7 @@ async function fetchAndUpdateWalletBalance() {
 function updateProfileWalletDisplay(balance) {
     if (profileWalletBalance) {
         profileWalletBalance.textContent = balance.toLocaleString('vi-VN') + 'đ';
-        
+
         // Add color coding based on balance
         if (balance >= 1000000) {
             profileWalletBalance.style.color = '#28a745'; // Green for good balance
@@ -191,7 +191,7 @@ async function saveVehicleData() {
         if (response.ok) {
             const result = await response.json();
             console.log('Vehicle data saved:', result);
-            
+
             // Update display with formatted string
             const vehicleInfo = [];
             if (vehicleData.licensePlate) vehicleInfo.push(vehicleData.licensePlate);
@@ -211,9 +211,69 @@ async function saveVehicleData() {
     }
 }
 
+async function loadChargingHistorySummary() {
+    const token = localStorage.getItem('accessToken') || localStorage.getItem('jwt_token');
+    if (!token) return;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/history/charging?limit=5`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            return;
+        }
+
+        const data = await response.json();
+        const sessions = Array.isArray(data) ? data : (data.history || data.sessions || []);
+
+        const listContent = document.getElementById('listContent');
+        const historyCount = document.getElementById('historyCount');
+        if (!listContent || !historyCount) return;
+
+        if (sessions.length === 0) {
+            historyCount.textContent = '0 giao dịch';
+            listContent.innerHTML = '<p class="address">Chưa có lịch sử sạc</p>';
+            return;
+        }
+
+        historyCount.textContent = sessions.length + ' giao dịch';
+
+        listContent.innerHTML = sessions.map(session => {
+            const start = session.startTime ? new Date(session.startTime) : null;
+            const dateStr = start ? start.toLocaleString('vi-VN') : '';
+            const energy = session.energyConsumed || 0;
+            const cost = session.totalCost || 0;
+            const stationName = session.stationName || (session.station && session.station.name) || 'Trạm sạc';
+            const completed = session.status === 'COMPLETED';
+            const statusClass = completed ? 'available' : 'busy';
+            const statusText = completed ? 'Hoàn thành' : 'Đang xử lý';
+
+            return `
+                <div class="station-card">
+                    <div class="station-header">
+                        <h4>${stationName}</h4>
+                        <span class="status ${statusClass}">${statusText}</span>
+                    </div>
+                    <p class="address"><i class="fa-solid fa-calendar-days"></i> ${dateStr}</p>
+                    <p class="details"><i class="fa-solid fa-bolt"></i> ${energy.toFixed(1)} kWh</p>
+                    <p class="distance charge-cost">-${cost.toLocaleString('vi-VN')}đ</p>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading charging history summary:', error);
+    }
+}
+
 // Load profile data on page load
 document.addEventListener('DOMContentLoaded', () => {
     displayProfile();
+    loadChargingHistorySummary();
 });
 
 // Toggle edit mode
@@ -236,7 +296,7 @@ editAvatar.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (file) {
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = function (e) {
             previewImg.src = e.target.result;
             avatarImg.src = e.target.result; // Cập nhật ảnh ngay khi chọn
         };
@@ -247,15 +307,15 @@ editAvatar.addEventListener('change', (e) => {
 // Save changes
 editProfileForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     // Save vehicle data first
     const vehicleSaved = await saveVehicleData();
-    
+
     if (vehicleSaved) {
         displayName.textContent = editName.value;
         displayEmail.textContent = editEmail.value;
         displayPhone.textContent = editPhone.value;
-        
+
         infoEdit.style.display = 'none';
         infoView.style.display = 'block';
         alert('Hồ sơ đã được cập nhật thành công!');
