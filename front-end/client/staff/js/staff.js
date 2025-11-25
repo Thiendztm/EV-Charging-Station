@@ -15,7 +15,7 @@ function checkAuth() {
 
   if (!token) {
     alert('Bạn cần đăng nhập để truy cập trang này');
-    window.location.href = '../login.html';
+    window.location.href = './login.html';
     return false;
   }
 

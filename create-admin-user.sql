@@ -33,6 +33,8 @@ VALUES (
   NOW()
 );
 
+
+
 -- 3. Tạo tài khoản Driver 2
 INSERT INTO nguoi_dung (email, password, first_name, last_name, phone, role, wallet_balance, created_at, updated_at) 
 VALUES (
