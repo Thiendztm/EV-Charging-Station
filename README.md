@@ -55,10 +55,11 @@
 
 **Backend:**
 
-- Spring Boot 3.x
+- Spring Boot 3.2.x (Java 21)
 - Spring Security (JWT)
 - Spring Data JPA
-- PostgreSQL
+- Microsoft SQL Server
+- WebSocket (STOMP) for real-time updates
 
 ---
 
@@ -72,12 +73,14 @@ copy-frontend.bat
 
 ### 2. Configure Database
 
-Edit `ev/src/main/resources/application.properties`:
+Update `ev/src/main/resources/application.properties` to match your local SQL Server instance:
 
 ```properties
-spring.datasource.url=jdbc:postgresql://localhost:5432/ev_charging_station
-spring.datasource.username=ev_user
-spring.datasource.password=ev_password
+spring.datasource.url=jdbc:sqlserver://localhost:1433;databaseName=EVDATABASE;encrypt=false;trustServerCertificate=true
+spring.datasource.username=sa
+spring.datasource.password=yourStrong!Password
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.SQLServerDialect
 ```
 
 ### 3. Build and Run
@@ -154,14 +157,16 @@ EV-Charging-Station/
 
 - `GET /api/stations` - Get all stations
 - `GET /api/stations/{id}` - Get station details
-- `GET /api/charging/history` - Get charging history
-- `GET /api/charging/session/{id}` - Get session details
+- `GET /api/history/charging` - Get charging history
+- `GET /api/history/bookings` - Get booking history
+- `GET /api/history/payments` - Get payment history
+- `GET /api/charging/sessions/{sessionId}` - Get session details
 
 ### Staff Operations
 
 - `GET /api/staff/station/{id}/status` - Get station status
 - `POST /api/staff/sessions/start` - Start session
-- `POST /api/staff/sessions/{id}/stop` - Stop session
+- `POST /api/staff/sessions/{sessionId}/stop` - Stop session
 - `POST /api/staff/payments/confirm` - Confirm payment
 
 ### Admin - Stations (6 endpoints)
@@ -182,18 +187,18 @@ EV-Charging-Station/
 
 ## Development Status
 
-| Phase   | Status      | Description          |
-| ------- | ----------- | -------------------- |
-| Phase 1 | ✅ Complete | API Standardization  |
-| Phase 2 | ✅ Complete | Staff Dashboard      |
-| Phase 3 | ✅ Complete | Admin Dashboard      |
-| Phase 4 | ✅ Complete | Profile Vehicle Info |
-| Phase 5 | ✅ Complete | Mock Data Removal    |
-| Phase 6 | ✅ Complete | API Documentation    |
-| Phase 7 | ✅ Complete | Deployment Guide     |
+| Phase   | Status      | Description                    |
+| ------- | ----------- | ------------------------------ |
+| Phase 1 | ✅ Complete | API standardization            |
+| Phase 2 | ✅ Complete | Staff dashboard (CS_STAFF)     |
+| Phase 3 | ✅ Complete | Admin dashboard (ADMIN)        |
+| Phase 4 | ✅ Complete | Driver profile & vehicle info  |
+| Phase 5 | ✅ Complete | Mock data removal              |
+| Phase 6 | ✅ Complete | API documentation              |
+| Phase 7 | ✅ Complete | Deployment & integration guide |
 
-**Frontend:** ✅ Production Ready  
-**Backend:** ⏳ Requires API Implementation
+**Frontend:** ✅ Production‑ready (driver, staff, admin portals)  
+**Backend:** 🚧 In progress – core auth, booking, charging, history & payment APIs implemented; further hardening and tests ongoing
 
 ---
 
@@ -317,7 +322,7 @@ See [DEPLOYMENT-GUIDE.md](DEPLOYMENT-GUIDE.md) for complete testing procedures:
 
 ### For DevOps Team
 
-1. ⏳ Set up PostgreSQL database
+1. ⏳ Set up SQL Server (or preferred relational) database
 2. ⏳ Configure Spring Boot application
 3. ⏳ Set up CI/CD pipeline
 4. ⏳ Configure monitoring and logging
@@ -358,7 +363,7 @@ This project is for educational purposes.
 
 **Current Version:** 1.0  
 **Status:** Production Ready (Frontend)  
-**Last Updated:** 2024
+**Last Updated:** 2025
 
 ---
 
