@@ -94,8 +94,8 @@ INSERT INTO nguoi_dung (
 VALUES (
     'staff1@evcharging.com',
     '$2a$10$vHkJqN5JqW7q7o9hP7qBTe9vKP9sWmN4MzUqLqP8qZ9hP7qBTe9vK',
-    N'Lê',
-    N'Bảo',
+    N'Lê Văn',
+    N'Chiến',
     '0912345678',
     'CS_STAFF',
     0.00,

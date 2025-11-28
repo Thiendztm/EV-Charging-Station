@@ -40,11 +40,7 @@ export async function fetchWithAuth(url, options = {}) {
     headers
   });
 
-  if (response.status === 401) {
-    alert('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
-    window.location.href = '/staff/login.html';
-    throw new Error('Unauthorized');
-  }
+
 
   return response;
 }
